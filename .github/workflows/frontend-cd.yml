@@ -58,20 +58,28 @@ jobs:
         id: login-ecr
         uses: aws-actions/amazon-ecr-login@v1
 
-      - name: Build and push image
-        working-directory: starter/frontend
-        env:
-          ECR_REGISTRY: ${{ steps.login-ecr.outputs.registry }}
-          IMAGE_TAG: ${{ github.sha }}
-        run: |
-          docker build --build-arg=REACT_APP_MOVIE_API_URL=http://localhost:5000 --tag=$ECR_REGISTRY/frontend:$IMAGE_TAG .
-          docker push $ECR_REGISTRY/frontend:$IMAGE_TAG
-
       - name: Install kubectl
         uses: azure/setup-kubectl@v3
 
       - name: Update kubeconfig
         run: aws eks update-kubeconfig --name cluster --region us-east-1
+
+      - name: Get backend service URL
+        id: backend-url
+        run: |
+          BACKEND_HOST=$(kubectl get svc backend -o jsonpath='{.status.loadBalancer.ingress[0].hostname}')
+          echo "Resolved backend host: $BACKEND_HOST"
+          echo "url=http://$BACKEND_HOST" >> "$GITHUB_OUTPUT"
+
+      - name: Build and push image
+        working-directory: starter/frontend
+        env:
+          ECR_REGISTRY: ${{ steps.login-ecr.outputs.registry }}
+          IMAGE_TAG: ${{ github.sha }}
+          REACT_APP_MOVIE_API_URL: ${{ steps.backend-url.outputs.url }}
+        run: |
+          docker build --build-arg=REACT_APP_MOVIE_API_URL=$REACT_APP_MOVIE_API_URL --tag=$ECR_REGISTRY/frontend:$IMAGE_TAG .
+          docker push $ECR_REGISTRY/frontend:$IMAGE_TAG
 
       - name: Deploy to Kubernetes
         working-directory: starter/frontend/k8s

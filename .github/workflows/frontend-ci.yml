@@ -46,7 +46,17 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v3
+
       - name: Build Docker image
         working-directory: starter/frontend
         run: |
           docker build --build-arg=REACT_APP_MOVIE_API_URL=http://localhost:5000 --tag=mp-frontend:latest .
+
+      - name: Run container and verify it serves traffic
+        working-directory: starter/frontend
+        run: |
+          docker run --name mp-frontend -p 3000:3000 -d mp-frontend:latest
+          sleep 5
+          curl --fail http://localhost:3000 || (echo "Container failed health check" && docker logs mp-frontend && exit 1)
+          docker stop mp-frontend
+          docker rm mp-frontend
